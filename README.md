@@ -46,6 +46,13 @@ Decompresses the data in encoded_buffer into decoded_buffer.
 
 compressStream
 --------------
+`syntax: ok, err = zstd.compressStream(path, clvl?)`
+
+Compresses the input file with clvl compression level.
 
 decompressFile
 --------------
+`syntax: ok, err = zstd.decompressFile(fname, outname?)`
+
+Decompress the input file fname.
+
