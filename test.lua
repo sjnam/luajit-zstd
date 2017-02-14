@@ -1,5 +1,5 @@
 local zstd = require "lib.resty.zstd"
---[[
+
 local compress, decompress = zstd.compress, zstd.decompress
 local compressStream = zstd.compressStream
 
@@ -15,18 +15,3 @@ for lvl=1,maxlvl do
    assert(txt == decoded)
    print(lvl, #encoded)
 end
-
-
-local fname = "input.txt"
-local f = io.open(fname, "wb")
-f:write(txt)
-f:close()
-
-print(compressStream(fname, 13))
---]]
-
-zstd.decompressFile("input.txt.zst")
-
---os.remove(fname)
---os.remove(fname..".br")
-
