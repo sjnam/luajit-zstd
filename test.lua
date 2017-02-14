@@ -1,5 +1,5 @@
 local zstd = require "lib.resty.zstd"
-
+--[[
 local compress, decompress = zstd.compress, zstd.decompress
 local compressStream = zstd.compressStream
 
@@ -22,7 +22,10 @@ local f = io.open(fname, "wb")
 f:write(txt)
 f:close()
 
-print(compressStream(fname, fname..".zst", 13))
+print(compressStream(fname, 13))
+--]]
+
+zstd.decompressFile("input.txt.zst")
 
 --os.remove(fname)
 --os.remove(fname..".br")

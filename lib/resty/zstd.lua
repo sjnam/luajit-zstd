@@ -23,7 +23,6 @@ FILE  *fopen(const char *fname, const char *mode);
 size_t fread(void *ptr, size_t size, size_t nitems, FILE *stream);
 size_t fwrite(const void *ptr, size_t size, size_t nitems, FILE *stream);
 
-
 unsigned ZSTD_versionNumber(void);
 
 size_t ZSTD_compress( void* dst, size_t dstCapacity,
@@ -76,47 +75,6 @@ size_t ZSTD_DStreamOutSize(void);
 local zstd = ffi_load("zstd")
 
 
-local function _ZSTD_maxCLevel ()
-   return tonumber(zstd.ZSTD_maxCLevel())
-end
-_M.maxCLevel = _ZSTD_maxCLevel
-
-
-local function _ZSTD_compress (fBuff, clvl)
-   local fSize = #fBuff
-   local cBuffSize = zstd.ZSTD_compressBound(fSize);
-   local cBuff = ffi_new("uint8_t[?]", cBuffSize)
-   local cSize = zstd.ZSTD_compress(cBuff, cBuffSize, fBuff, fSize, clvl or 1)
-   if zstd.ZSTD_isError(cSize) ~= 0 then
-      local errStr = zstd.ZSTD_getErrorName(cSize)
-      return nil, "error compressing: " .. errStr
-   end
-
-   ffi_gc(cBuff, free)
-   return ffi_str(cBuff, cSize)
-end
-_M.compress = _ZSTD_compress
-
-
-local function _ZSTD_decompress (cBuff)
-   local cSize = #cBuff
-   local rSize = zstd.ZSTD_findDecompressedSize(cBuff, cSize);
-   if rSize == 0 then
-      return nil, "original size unknown. Use streaming decompression instead"
-   end
-   local rBuff = ffi_new("uint8_t[?]", rSize)
-   local dSize = zstd.ZSTD_decompress(rBuff, rSize, cBuff, cSize)
-   if dSize ~= rSize then
-      local errStr = zstd.ZSTD_getErrorName(dSize)
-      return nil, "error decoding: " .. errStr
-   end
-
-   ffi_gc(rBuff, free)
-   return ffi_str(rBuff, dSize)
-end
-_M.decompress = _ZSTD_decompress
-
-
 local function _fopen (fname, mode)
    local f = C.fopen(fname, mode)
    if not f then
@@ -152,9 +110,50 @@ local function _fclose (stream)
 end
 
 
-local function _ZSTD_compressStream (fname, outName, cLevel)
+local function _maxCLevel ()
+   return tonumber(zstd.ZSTD_maxCLevel())
+end
+_M.maxCLevel = _maxCLevel
+
+
+local function _compress (fBuff, clvl)
+   local clvl = clvl or 13
+   local fSize = #fBuff
+   local cBuffSize = zstd.ZSTD_compressBound(fSize);
+   local cBuff = ffi_new("uint8_t[?]", cBuffSize)
+   local cSize = zstd.ZSTD_compress(cBuff, cBuffSize, fBuff, fSize, clvl or 1)
+   if zstd.ZSTD_isError(cSize) ~= 0 then
+      return nil, "error compressing: " .. zstd.ZSTD_getErrorName(cSize)
+   end
+
+   ffi_gc(cBuff, free)
+   return ffi_str(cBuff, cSize)
+end
+_M.compress = _compress
+
+
+local function _decompress (cBuff)
+   local cSize = #cBuff
+   local rSize = zstd.ZSTD_findDecompressedSize(cBuff, cSize);
+   if rSize == 0 then
+      return nil, "original size unknown. Use streaming decompression instead"
+   end
+   local rBuff = ffi_new("uint8_t[?]", rSize)
+   local dSize = zstd.ZSTD_decompress(rBuff, rSize, cBuff, cSize)
+   if dSize ~= rSize then
+      local errStr = zstd.ZSTD_getErrorName(dSize)
+      return nil, "error decoding: " .. errStr
+   end
+
+   ffi_gc(rBuff, free)
+   return ffi_str(rBuff, dSize)
+end
+_M.decompress = _decompress
+
+
+local function _compressStream (fname, cLevel)
    local fin = _fopen(fname, "rb")
-   local fout = _fopen(outName, "wb")
+   local fout = _fopen(fname..".zst", "wb")
    local buffInSize = zstd.ZSTD_CStreamInSize();
    local buffIn = ffi_new("uint8_t[?]", buffInSize);
    local buffOutSize = zstd.ZSTD_CStreamOutSize();
@@ -171,12 +170,10 @@ local function _ZSTD_compressStream (fname, outName, cLevel)
    end
 
    local toRead = buffInSize;
-   local result = {}
-
    local read = _fread(buffIn, toRead, fin)
    while read do
       local input = ffi_new("ZSTD_inBuffer[1]")
-      input[0] = { buffIn, toRead, 0 }
+      input[0] = { buffIn, read, 0 }
       while input[0].pos < input[0].size do
          local output = ffi_new("ZSTD_outBuffer[1]")
          output[0] = { buffOut, buffOutSize, 0 }
@@ -204,11 +201,59 @@ local function _ZSTD_compressStream (fname, outName, cLevel)
    zstd.ZSTD_freeCStream(cstream)
    _fclose(fout)
    _fclose(fin)
+   ffi_gc(buffIn, free)
+   ffi_gc(buffOut, free)
    
    return true
 end
-_M.compressStream = _ZSTD_compressStream
+_M.compressStream = _compressStream
+
+
+local function _decompressFile (fname)
+   local fin = _fopen(fname, "rb")
+   local buffInSize = zstd.ZSTD_DStreamInSize()
+   local buffIn = ffi_new("uint8_t[?]", buffInSize)
+   local fout = _fopen("org.txt", "wb")
+   local buffOutSize = zstd.ZSTD_DStreamOutSize()
+   local buffOut = ffi_new("uint8_t[?]", buffOutSize)
+
+   local dstream = zstd.ZSTD_createDStream()
+   if not dstream then
+      return nil, "ZSTD_createDStream() error"
+   end
+   local initResult = zstd.ZSTD_initDStream(dstream)
+   if zstd.ZSTD_isError(initResult) ~= 0 then
+      return nil, "ZSTD_initDStream() error: "
+         .. zstd.ZSTD_getErrorName(initResult)
+   end
+
+   local toRead = initResult
+   local read = _fread(buffIn, toRead, fin)
+   while read do
+      local input = ffi_new("ZSTD_inBuffer[1]")
+      input[0] = { buffIn, read, 0 }
+      while input[0].pos < input[0].size do
+         local output = ffi_new("ZSTD_outBuffer[1]")
+         output[0] = { buffOut, buffOutSize, 0 }
+         toRead = zstd.ZSTD_decompressStream(dstream, output, input);
+         if zstd.ZSTD_isError(toRead) ~= 0 then
+            return nil, "ZSTD_decompressStream() error: "
+               ..ZSTD_getErrorName(toRead)
+         end
+         _fwrite(buffOut, output[0].pos, fout)
+      end
+      read = _fread(buffIn, toRead, fin)
+   end
+
+   zstd.ZSTD_freeDStream(dstream)
+   _fclose(fin)
+   _fclose(fout)
+   ffi_gc(buffIn, free)
+   ffi_gc(buffOut, free)
+
+   return true
+end
+_M.decompressFile = _decompressFile
 
 
 return _M
-
