@@ -17,6 +17,13 @@ local _M = { _VERSION = '0.01' }
 
 
 ffi.cdef[[
+typedef void *FILE;
+int    fclose(FILE *stream);
+FILE  *fopen(const char *fname, const char *mode);
+size_t fread(void *ptr, size_t size, size_t nitems, FILE *stream);
+size_t fwrite(const void *ptr, size_t size, size_t nitems, FILE *stream);
+
+
 unsigned ZSTD_versionNumber(void);
 
 size_t ZSTD_compress( void* dst, size_t dstCapacity,
@@ -110,7 +117,44 @@ end
 _M.decompress = _ZSTD_decompress
 
 
-local function _ZSTD_compressStream (src, cLevel)
+local function _fopen (fname, mode)
+   local f = C.fopen(fname, mode)
+   if not f then
+      return nil, "fail to open file: "..fname
+   end
+   return f
+end
+
+
+local function _fread (buffer, nitems, stream)
+   local bytes_read = C.fread(buffer, 1, nitems, stream)
+   if bytes_read == nitems then
+      return bytes_read
+   end
+   return nil, "fail to fread"
+end
+
+
+local function _fwrite (buffer, nitems, stream)
+   local bytes_write = C.fwrite(buffer, 1, nitems, stream)
+   if bytes_write == nitems then
+      return bytes_write
+   end
+   return nil, "fail to fwrite"
+end
+
+   
+local function _fclose (stream)
+   if C.fclose(stream) == 0 then
+      return 0
+   end
+   return nil, "fail to fclose"
+end
+
+
+local function _ZSTD_compressStream (fname, outName, cLevel)
+   local fin = _fopen(fname, "rb")
+   local fout = _fopen(outName, "wb")
    local buffInSize = zstd.ZSTD_CStreamInSize();
    local buffIn = ffi_new("uint8_t[?]", buffInSize);
    local buffOutSize = zstd.ZSTD_CStreamOutSize();
@@ -122,41 +166,46 @@ local function _ZSTD_compressStream (src, cLevel)
    end
    local initResult = zstd.ZSTD_initCStream(cstream, cLevel);
    if zstd.ZSTD_isError(initResult) ~= 0 then
-      return nil, "ZSTD_initCStream() error: " .. zstd.ZSTD_getErrorName(initResult)
+      return nil, "ZSTD_initCStream() error: "
+         .. zstd.ZSTD_getErrorName(initResult)
    end
-
-   local inputLen = #src
-   local buff = ffi_new("uint8_t[?]", inputLen, src)
-   local p = buff
 
    local toRead = buffInSize;
    local result = {}
-   while inputLen > 0 do
-      if inputLen <= buffInSize then
-         toRead = inputLen
-      end
-      ffi_copy(buffIn, ffi_str(p, toRead))
+
+   local read = _fread(buffIn, toRead, fin)
+   while read do
       local input = ffi_new("ZSTD_inBuffer[1]")
-      input[0] = {buffIn, toRead, 0}
+      input[0] = { buffIn, toRead, 0 }
       while input[0].pos < input[0].size do
          local output = ffi_new("ZSTD_outBuffer[1]")
-         output[0] = {buffOut, buffOutSize, 0}
+         output[0] = { buffOut, buffOutSize, 0 }
          toRead = zstd.ZSTD_compressStream(cstream, output, input);
          if zstd.ZSTD_isError(toRead) ~= 0 then
-            local errStr = ZSTD_getErrorName(toRead)
-            return nil, "ZSTD_compressStream() error: "..errStr 
+            return nil, "ZSTD_compressStream() error: "
+               ..ZSTD_getErrorName(toRead)
          end
          if toRead > buffInSize then
             toRead = buffInSize
          end
-         tab_insert(result, ffi_str(buffOut, output[0].pos))
+         _fwrite(buffOut, output[0].pos, fout)
       end
-      inputLen = inputLen - toRead
-      p = p + toRead
+      read = _fread(buffIn, toRead, fin)
    end
 
-   zstd.ZSTD_freeCStream(cstream);
-   return tab_concat(result)
+   local output = ffi_new("ZSTD_outBuffer[1]")
+   output[0] = { buffOut, buffOutSize, 0 }
+   local remainingToFlush = zstd.ZSTD_endStream(cstream, output)
+   if remainingToFlush ~= 0 then
+      return nil, "not fully flushed"
+   end
+   _fwrite(buffOut, output[0].pos, fout)
+   
+   zstd.ZSTD_freeCStream(cstream)
+   _fclose(fout)
+   _fclose(fin)
+   
+   return true
 end
 _M.compressStream = _ZSTD_compressStream
 
