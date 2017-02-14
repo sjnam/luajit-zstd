@@ -1,5 +1,3 @@
-# lua-resty-zstd
-
 Name
 ====
 lua-resty-zstd - Lua bindings to facebook
