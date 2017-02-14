@@ -9,9 +9,9 @@ local C = ffi.C
 
 local assert = assert
 local tonumber = tonumber
+local str_gsub = string.gsub
 local tab_insert = table.insert
 local tab_concat = table.concat
-
 
 local _M = { _VERSION = '0.01' }
 
@@ -87,7 +87,7 @@ end
 local function _fread (buffer, nitems, stream)
    local bytes_read = C.fread(buffer, 1, nitems, stream)
    if bytes_read == nitems then
-      return bytes_read
+         return bytes_read
    end
    return nil, "fail to fread"
 end
@@ -152,6 +152,7 @@ _M.decompress = _decompress
 
 
 local function _compressStream (fname, cLevel)
+   local cLevel = cLevel or 11
    local fin = _fopen(fname, "rb")
    local fout = _fopen(fname..".zst", "wb")
    local buffInSize = zstd.ZSTD_CStreamInSize();
@@ -209,11 +210,12 @@ end
 _M.compressStream = _compressStream
 
 
-local function _decompressFile (fname)
+local function _decompressFile (fname, outName)
    local fin = _fopen(fname, "rb")
    local buffInSize = zstd.ZSTD_DStreamInSize()
    local buffIn = ffi_new("uint8_t[?]", buffInSize)
-   local fout = _fopen("org.txt", "wb")
+   local outName = outName or str_gsub(fname, "%.zst", "")
+   local fout = _fopen(outName, "wb")
    local buffOutSize = zstd.ZSTD_DStreamOutSize()
    local buffOut = ffi_new("uint8_t[?]", buffOutSize)
 
@@ -221,6 +223,7 @@ local function _decompressFile (fname)
    if not dstream then
       return nil, "ZSTD_createDStream() error"
    end
+
    local initResult = zstd.ZSTD_initDStream(dstream)
    if zstd.ZSTD_isError(initResult) ~= 0 then
       return nil, "ZSTD_initDStream() error: "
@@ -229,7 +232,7 @@ local function _decompressFile (fname)
 
    local toRead = initResult
    local read = _fread(buffIn, toRead, fin)
-   while read do
+   while read ~= 0 do
       local input = ffi_new("ZSTD_inBuffer[1]")
       input[0] = { buffIn, read, 0 }
       while input[0].pos < input[0].size do
@@ -257,3 +260,4 @@ _M.decompressFile = _decompressFile
 
 
 return _M
+
