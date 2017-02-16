@@ -15,7 +15,7 @@ local tab_insert = table.insert
 local tab_concat = table.concat
 
 
-local _M = { _VERSION = '0.10' }
+local _M = { _VERSION = '0.1.0' }
 
 
 ffi.cdef[[
@@ -117,13 +117,20 @@ local function _fclose (stream)
 end
 
 
-local function _maxCLevel ()
+local mt = { __index = _M }
+
+
+function _M.new (self, options)
+   return setmetatable( {  }, mt)
+end
+
+
+function _M.maxCLevel (self)
    return tonumber(zstd.ZSTD_maxCLevel())
 end
-_M.maxCLevel = _maxCLevel
 
 
-local function _compress (fBuff, clvl)
+function _M.compress (self, fBuff, clvl)
    local clvl = clvl or 11
    local fSize = #fBuff
    local cBuffSize = zstd.ZSTD_compressBound(fSize);
@@ -138,10 +145,9 @@ local function _compress (fBuff, clvl)
    
    return compressed 
 end
-_M.compress = _compress
 
 
-local function _decompress (cBuff)
+function _M.decompress (self, cBuff)
    local cSize = #cBuff
    local rSize = zstd.ZSTD_findDecompressedSize(cBuff, cSize);
    if rSize == 0 then
@@ -158,10 +164,9 @@ local function _decompress (cBuff)
 
    return decompressed 
 end
-_M.decompress = _decompress
 
 
-local function _compressStream (fname, cLevel)
+function _M.compressStream (self, fname, cLevel)
    local cLevel = cLevel or 11
    local fin = _fopen(fname, "rb")
    local fout = _fopen(fname..".zst", "wb")
@@ -216,10 +221,9 @@ local function _compressStream (fname, cLevel)
    ffi_gc(buffOut, free)
    return true
 end
-_M.compressStream = _compressStream
 
 
-local function _decompressFile (fname, outName)
+function _M.decompressFile (self, fname, outName)
    local fin = _fopen(fname, "rb")
    local buffInSize = zstd.ZSTD_DStreamInSize()
    local buffIn = ffi_new(arr_utint8_t, buffInSize)
@@ -265,7 +269,6 @@ local function _decompressFile (fname, outName)
    ffi_gc(buffOut, free)
    return true
 end
-_M.decompressFile = _decompressFile
 
 
 return _M

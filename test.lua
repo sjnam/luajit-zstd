@@ -1,17 +1,16 @@
-local zstd = require "lib.resty.zstd"
+local zstandard = require "lib.resty.zstd"
 
-local compress, decompress = zstd.compress, zstd.decompress
-local compressStream = zstd.compressStream
+local zstd = zstandard:new()
 
 local txt = string.rep("ABCDEFGH", 131072)
 
 print("input size= "..#txt, "\n\ncompressed")
 print("level", "size", "\n------------")
 
-local maxlvl = zstd.maxCLevel()
+local maxlvl = zstd:maxCLevel()
 for lvl=1,maxlvl do
-   local encoded, err = compress(txt, lvl)
-   local decoded, err = decompress(encoded)
+   local encoded, err = zstd:compress(txt, lvl)
+   local decoded, err = zstd:decompress(encoded)
    assert(txt == decoded)
    print(lvl, #encoded)
 end
@@ -22,9 +21,9 @@ local f = io.open(fname, "wb")
 f:write(txt)
 f:close()
 
-assert(compressStream(fname))
+assert(zstd:compressStream(fname))
 
-assert(zstd.decompressFile("input.txt.zst", "foo.txt"))
+assert(zstd:decompressFile("input.txt.zst", "foo.txt"))
 
 os.remove("foo.txt")
 os.remove("input.txt")

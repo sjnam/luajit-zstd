@@ -20,12 +20,13 @@ your lua library path.
 Example
 =======
 ```` lua
-local zstd = require "resty.zstd"
+local zstandard = require "resty.zstd"
+local zstd = zstandard:new()
 local txt = string.rep("ABCD", 1000)
 print("Uncompressed size:", #txt)
-local c, err = zstd.compress(txt)
+local c, err = zstd:compress(txt)
 print("Compressed size:", #c)
-local txt2, err = zstd.decompress(c)
+local txt2, err = zstd:decompress(c)
 assert(txt == txt2)
 ````
 
@@ -34,25 +35,25 @@ Methods
 
 compress
 --------
-`syntax: encoded_buffer, err = zstd.compress(input_buffer, clvl)`
+`syntax: encoded_buffer, err = zstd:compress(input_buffer, clvl)`
 
 Compresses the data in input_buffer into encoded_buffer.
 
 decompress
 ----------
-`syntax: decoded_buffer, err = zstd.decompress(encoded_buffer)`
+`syntax: decoded_buffer, err = zstd:decompress(encoded_buffer)`
 
 Decompresses the data in encoded_buffer into decoded_buffer.
 
 compressStream
 --------------
-`syntax: ok, err = zstd.compressStream(path, clvl?)`
+`syntax: ok, err = zstd:compressStream(path, clvl?)`
 
 Compresses the input file with clvl compression level.
 
 decompressFile
 --------------
-`syntax: ok, err = zstd.decompressFile(fname, outname?)`
+`syntax: ok, err = zstd:decompressFile(fname, outname?)`
 
 Decompress the input file fname.
 
