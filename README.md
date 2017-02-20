@@ -45,9 +45,9 @@ decompress
 
 Decompresses the data in encoded_buffer into decoded_buffer.
 
-compressStream
+compressFile
 --------------
-`syntax: ok, err = zstd:compressStream(path, clvl?)`
+`syntax: ok, err = zstd:compressFile(path, clvl?)`
 
 Compresses the input file with clvl compression level.
 

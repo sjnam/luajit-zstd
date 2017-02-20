@@ -166,8 +166,8 @@ function _M.decompress (self, cBuff)
 end
 
 
-function _M.compressStream (self, fname, cLevel)
-   local cLevel = cLevel or 11
+function _M.compressFile (self, fname, cLevel)
+   local cLevel = cLevel or 1
    local fin = _fopen(fname, "rb")
    local fout = _fopen(fname..".zst", "wb")
    local buffInSize = zstd.ZSTD_CStreamInSize();

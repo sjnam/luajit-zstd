@@ -15,17 +15,17 @@ for lvl=1,maxlvl do
    print(lvl, #encoded)
 end
 
+--
 
 local fname = "input.txt"
 local f = io.open(fname, "wb")
 f:write(txt)
 f:close()
 
-assert(zstd:compressStream(fname))
+assert(zstd:compressFile(fname))
 
 assert(zstd:decompressFile("input.txt.zst", "foo.txt"))
 
 os.remove("foo.txt")
 os.remove("input.txt")
 os.remove("input.txt.zst")
-
