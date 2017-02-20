@@ -131,7 +131,7 @@ end
 
 
 function _M.compress (self, fBuff, clvl)
-   local clvl = clvl or 11
+   local clvl = clvl or 1
    local fSize = #fBuff
    local cBuffSize = zstd.ZSTD_compressBound(fSize);
    local cBuff = ffi_new(arr_utint8_t, cBuffSize)
