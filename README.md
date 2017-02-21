@@ -28,10 +28,23 @@ local c, err = zstd:compress(txt)
 print("Compressed size:", #c)
 local txt2, err = zstd:decompress(c)
 assert(txt == txt2)
+zstd:free()
 ````
 
 Methods
 =======
+
+new
+---
+`syntax: zstd = zstandard:new()`
+
+Create cstream and dstream.
+
+free
+----
+`syntax: zstd:free()`
+
+Free cstream and dstream.
 
 compress
 --------

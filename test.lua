@@ -10,9 +10,9 @@ print("level", "size", "\n------------")
 local maxlvl = zstd:maxCLevel()
 for lvl=1,maxlvl do
    local encoded, err = zstd:compress(txt, lvl)
+   print(lvl, #encoded)
    local decoded, err = zstd:decompress(encoded)
    assert(txt == decoded)
-   print(lvl, #encoded)
 end
 
 --
@@ -26,6 +26,10 @@ assert(zstd:compressFile(fname))
 
 assert(zstd:decompressFile("input.txt.zst", "foo.txt"))
 
+zstd:free()
+
 os.remove("foo.txt")
 os.remove("input.txt")
 os.remove("input.txt.zst")
+
+print("\nOK")
