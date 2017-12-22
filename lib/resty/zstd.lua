@@ -17,6 +17,7 @@ local tconcat = table.concat
 
 
 ffi.cdef[[
+size_t      ZSTD_compressBound(size_t srcSize);
 int    ZSTD_maxCLevel(void);
 unsigned    ZSTD_isError(size_t code);
 const char* ZSTD_getErrorName(size_t code);
@@ -51,12 +52,36 @@ size_t ZSTD_decompressStream(ZSTD_DStream* zds,
                              ZSTD_outBuffer* output, ZSTD_inBuffer* input);
 size_t ZSTD_DStreamInSize(void);
 size_t ZSTD_DStreamOutSize(void);
+
+typedef struct ZSTD_CCtx_s ZSTD_CCtx;
+ZSTD_CCtx* ZSTD_createCCtx(void);
+size_t     ZSTD_freeCCtx(ZSTD_CCtx* cctx);
+typedef struct ZSTD_CDict_s ZSTD_CDict;
+ZSTD_CDict* ZSTD_createCDict(const void* dictBuffer, size_t dictSize,
+                             int compressionLevel);
+size_t      ZSTD_freeCDict(ZSTD_CDict* CDict);
+size_t ZSTD_compress_usingCDict(ZSTD_CCtx* cctx,
+                                void* dst, size_t dstCapacity,
+                          const void* src, size_t srcSize,
+                          const ZSTD_CDict* cdict);
+
+typedef struct ZSTD_DCtx_s ZSTD_DCtx;
+ZSTD_DCtx* ZSTD_createDCtx(void);
+size_t     ZSTD_freeDCtx(ZSTD_DCtx* dctx);
+typedef struct ZSTD_DDict_s ZSTD_DDict;
+ZSTD_DDict* ZSTD_createDDict(const void* dictBuffer, size_t dictSize);
+size_t      ZSTD_freeDDict(ZSTD_DDict* ddict);
+size_t ZSTD_decompress_usingDDict(ZSTD_DCtx* dctx,
+                                  void* dst, size_t dstCapacity,
+                            const void* src, size_t srcSize,
+                            const ZSTD_DDict* ddict);
 ]]
 
 
 local arr_utint8_t = ffi_typeof "uint8_t[?]"
 local ptr_zstd_inbuffer_t = ffi_typeof "ZSTD_inBuffer[1]"
 local ptr_zstd_outbuffer_t = ffi_typeof "ZSTD_outBuffer[1]"
+
 
 local zstd = ffi_load "zstd"
 
@@ -66,29 +91,31 @@ local _M = { _VERSION = '0.2.1' }
 local mt = { __index = _M }
 
 
-local function _initCStream (cstream, clvl)
-   local initResult = zstd.ZSTD_initCStream(cstream, clvl or 1);
-   if zstd.ZSTD_isError(initResult) ~= 0 then
+local function init_cstream (cstream, clvl)
+   local res = zstd.ZSTD_initCStream(cstream, clvl or 1);
+
+   if zstd.ZSTD_isError(res) ~= 0 then
       return nil, "ZSTD_initCStream() error: "
-         .. zstd.ZSTD_getErrorName(initResult)
+         .. zstd.ZSTD_getErrorName(res)
    end
 
    return true
 end
 
 
-local function _initDStream (dstream)
-   local initResult = zstd.ZSTD_initDStream(dstream)
-   if zstd.ZSTD_isError(initResult) ~= 0 then
+local function init_dstream (dstream)
+   local res = zstd.ZSTD_initDStream(dstream)
+
+   if zstd.ZSTD_isError(res) ~= 0 then
       return nil, "ZSTD_initDStream() error: "
-         .. zstd.ZSTD_getErrorName(initResult)
+         .. zstd.ZSTD_getErrorName(res)
    end
 
    return true
 end
 
 
-local function _endFrame (cstream)
+local function end_frame (cstream)
    local buffOutSize = zstd.ZSTD_CStreamOutSize();
    local buffOut = ffi_new(arr_utint8_t, buffOutSize);
    local output = ffi_new(ptr_zstd_outbuffer_t)
@@ -103,7 +130,7 @@ local function _endFrame (cstream)
 end
 
 
-function _M.new (self, options)
+function _M.new (self)
    local cstream = zstd.ZSTD_createCStream();
    if not cstream then
       return nil, "ZSTD_createCStream() error"
@@ -114,9 +141,7 @@ function _M.new (self, options)
       return nil, "ZSTD_createDStream() error"
    end
 
-   return setmetatable(
-      { cstream = cstream, dstream = dstream },
-      mt)
+   return setmetatable({ cstream = cstream, dstream = dstream }, mt)
 end
 
 
@@ -131,7 +156,7 @@ function _M.maxCLevel (self)
 end
 
 
-local function _compressStream (cstream, buffIn, cLevel)
+local function compress_stream (cstream, buffIn, cLevel)
    local cLevel = cLevel or 1
    local buffInSize = #buffIn
    local buffOutSize = zstd.ZSTD_CStreamOutSize();
@@ -157,12 +182,12 @@ local function _compressStream (cstream, buffIn, cLevel)
    end
 
    ffi_gc(buffOut, free)
+
    return tconcat(result)
 end
-_M.compressStream = _compressStream
 
 
-local function _decompressStream (dstream, buffIn)
+local function decompress_stream (dstream, buffIn)
    local toRead = #buffIn
    local buffOutSize = zstd.ZSTD_DStreamOutSize()
    local buffOut = ffi_new(arr_utint8_t, buffOutSize)
@@ -186,41 +211,52 @@ local function _decompressStream (dstream, buffIn)
    
    return tconcat(decompressed)
 end
-_M.decompressStream = _decompressStream
+
+
+function _M.compressStream (self, buffIn, cLevel)
+   return compress_stream(self.cstream, buffIn, cLevel)
+end
 
 
 function _M.compress (self, fBuff, clvl)
    local cstream = self.cstream
-   local initResult, err = _initCStream(cstream, clvl)
-   if not initResult then
+
+   local res, err = init_cstream(cstream, clvl)
+   if not res then
       return nil, err
    end
    
    return tconcat {
-      _compressStream(cstream, fBuff, cLevel),
-      _endFrame(cstream)
+      compress_stream(cstream, fBuff, cLevel),
+      end_frame(cstream)
    }
+end
+
+
+function _M.decompressStream (self, buffIn)
+   return decompress_stream(self.dstream, buffIn)
 end
 
 
 function _M.decompress (self, cBuff)
    local dstream = self.dstream
-   local ret, err = _initDStream(dstream)
-   if not ret then
+
+   local res, err = init_dstream(dstream)
+   if not res then
       return nil, err
    end
-   return _decompressStream(dstream, cBuff)
+
+   return decompress_stream(dstream, cBuff)
 end
 
 
 function _M.compressFile (self, fname, cLevel)
-   local cLevel = cLevel or 1
    local cstream = self.cstream
    local fin = assert(fopen(fname, "rb"))
    local fout = assert(fopen(fname..".zst", "wb"))
 
-   local initResult, err = _initCStream(cstream, clvl)
-   if not initResult then
+   local res, err = init_cstream(cstream, cLevel)
+   if not res then
       return nil, err
    end
    
@@ -228,12 +264,12 @@ function _M.compressFile (self, fname, cLevel)
    local buff = fin:read(toRead)
 
    while buff do
-      local buffOut = _compressStream(cstream, buff, cLevel)
+      local buffOut = compress_stream(cstream, buff, cLevel)
       fout:write(buffOut)
       buff = fin:read(toRead)
    end
 
-   fout:write(_endFrame(cstream))
+   fout:write(end_frame(cstream))
 
    fout:close()
    fin:close()
@@ -247,8 +283,8 @@ function _M.decompressFile (self, fname, outName)
    local fin = assert(fopen(fname, "rb"))
    local fout = assert(fopen(outName or gsub(fname, "%.zst", ""), "wb"))
 
-   local initResult, err = _initDStream(dstream)
-   if not initResult then
+   local res, err = init_dstream(dstream)
+   if not res then
       return nil, err
    end
 
@@ -256,7 +292,7 @@ function _M.decompressFile (self, fname, outName)
    local buff = fin:read(toRead)
 
    while buff do
-      local buffOut = _decompressStream(dstream, buff)
+      local buffOut = decompress_stream(dstream, buff)
       fout:write(buffOut)
       buff = fin:read(toRead)
    end
