@@ -28,6 +28,12 @@ assert(zstd:decompressFile("input.txt.zst", "foo.txt"))
 
 zstd:free()
 
+local f1 = io.open("input.txt")
+local f2 = io.open("foo.txt")
+assert(f1:read("*a") == f2:read("*a"))
+f1:close()
+f2:close()
+
 os.remove("foo.txt")
 os.remove("input.txt")
 os.remove("input.txt.zst")
