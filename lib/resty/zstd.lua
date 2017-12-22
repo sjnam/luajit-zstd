@@ -52,29 +52,6 @@ size_t ZSTD_decompressStream(ZSTD_DStream* zds,
                              ZSTD_outBuffer* output, ZSTD_inBuffer* input);
 size_t ZSTD_DStreamInSize(void);
 size_t ZSTD_DStreamOutSize(void);
-
-typedef struct ZSTD_CCtx_s ZSTD_CCtx;
-ZSTD_CCtx* ZSTD_createCCtx(void);
-size_t     ZSTD_freeCCtx(ZSTD_CCtx* cctx);
-typedef struct ZSTD_CDict_s ZSTD_CDict;
-ZSTD_CDict* ZSTD_createCDict(const void* dictBuffer, size_t dictSize,
-                             int compressionLevel);
-size_t      ZSTD_freeCDict(ZSTD_CDict* CDict);
-size_t ZSTD_compress_usingCDict(ZSTD_CCtx* cctx,
-                                void* dst, size_t dstCapacity,
-                          const void* src, size_t srcSize,
-                          const ZSTD_CDict* cdict);
-
-typedef struct ZSTD_DCtx_s ZSTD_DCtx;
-ZSTD_DCtx* ZSTD_createDCtx(void);
-size_t     ZSTD_freeDCtx(ZSTD_DCtx* dctx);
-typedef struct ZSTD_DDict_s ZSTD_DDict;
-ZSTD_DDict* ZSTD_createDDict(const void* dictBuffer, size_t dictSize);
-size_t      ZSTD_freeDDict(ZSTD_DDict* ddict);
-size_t ZSTD_decompress_usingDDict(ZSTD_DCtx* dctx,
-                                  void* dst, size_t dstCapacity,
-                            const void* src, size_t srcSize,
-                            const ZSTD_DDict* ddict);
 ]]
 
 
