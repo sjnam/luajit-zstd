@@ -1,4 +1,4 @@
-local zstandard = require "lib.resty.zstd"
+local zstandard = require "zstd"
 
 local zstd = zstandard:new()
 

@@ -1,26 +1,20 @@
 Name
 ====
-lua-resty-zstd - Lua bindings to facebook
-[Zstandard](https://github.com/facebook/zstd) for LuaJIT using FFI.
-
-
-Status
-======
-This library is still experimental and under early development.
+luajit-zstd - facebook [zstandard](https://github.com/facebook/zstd) ffi binding
 
 
 Installation
 ============
-To install `lua-resty-zstd` you need to install
+To install `luajit-zstd` you need to install
 [Zstandard](https://github.com/facebook/zstd#build)
 with shared libraries firtst.
-Then you can install `lua-resty-zstd` by placing `lib/resty/zstd.lua` to
+Then you can install `luajit-zstd` by placing `lib/zstd.lua` to
 your lua library path.
 
 Example
 =======
 ```` lua
-local zstandard = require "resty.zstd"
+local zstandard = require "zstd"
 local zstd = zstandard:new()
 local txt = string.rep("ABCD", 1000)
 print("Uncompressed size:", #txt)
@@ -70,3 +64,10 @@ decompressFile
 
 Decompress the input file fname.
 
+Author
+======
+Soojin Nam jsunam@gamil.com
+
+License
+=======
+Public Domain
