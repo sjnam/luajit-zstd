@@ -4,7 +4,6 @@
 
 
 local ffi = require "ffi"
-local C = ffi.C
 local ffi_new = ffi.new
 local ffi_load = ffi.load
 local ffi_str = ffi.string
@@ -72,20 +71,16 @@ local _M = {
 local function init_cstream (cstream, clvl)
    local res = zstd.ZSTD_initCStream(cstream, clvl or 1);
    if zstd.ZSTD_isError(res) ~= 0 then
-      return nil, "ZSTD_initCStream() error: "
-         .. zstd.ZSTD_getErrorName(res)
+      return "ZSTD_initCStream() error: "..ffi_str(zstd.ZSTD_getErrorName(res))
    end
-   return true
 end
 
 
 local function init_dstream (dstream)
    local res = zstd.ZSTD_initDStream(dstream)
    if zstd.ZSTD_isError(res) ~= 0 then
-      return nil, "ZSTD_initDStream() error: "
-         .. zstd.ZSTD_getErrorName(res)
+      return "ZSTD_initDStream() error: "..ffi_str(zstd.ZSTD_getErrorName(res))
    end
-   return true
 end
 
 
@@ -110,7 +105,7 @@ function _M.new (self)
    if not dstream then
       return nil, "ZSTD_createDStream() error"
    end
-   return setmetatable({ cstream = cstream, dstream = dstream }, { __index = _M })
+   return setmetatable({cstream = cstream, dstream = dstream}, {__index = _M})
 end
 
 
@@ -140,7 +135,7 @@ local function compress_stream (cstream, inbuf, cLevel)
       rlen = zstd.ZSTD_compressStream(cstream, output, input);
       if zstd.ZSTD_isError(rlen) ~= 0 then
          return nil, "ZSTD_compressStream() error: "
-            ..ZSTD_getErrorName(rlen)
+            .. ffi_str(zstd.ZSTD_getErrorName(rlen))
       end
       if rlen > insize then
          rlen = insize
@@ -164,7 +159,7 @@ local function decompress_stream (dstream, inbuf)
       rlen = zstd.ZSTD_decompressStream(dstream, output, input);
       if zstd.ZSTD_isError(rlen) ~= 0 then
          return nil, "ZSTD_decompressStream() error: "
-            ..ZSTD_getErrorName(rlen)
+            .. ffi_str(zstd.ZSTD_getErrorName(rlen))
       end
       tinsert(decompressed, ffi_str(obuf, output[0].pos))
    end
@@ -172,33 +167,32 @@ local function decompress_stream (dstream, inbuf)
 end
 
 
-function _M.compress (self, fBuff, clvl)
+function _M:compress (fBuff, clvl)
    local cstream = self.cstream
-   local res, err = init_cstream(cstream, clvl)
-   if not res then
+   local err = init_cstream(cstream, clvl)
+   if err then
       return nil, err
    end
-   return  compress_stream(cstream, fBuff, cLevel)
-      .. end_frame(cstream)
+   return compress_stream(cstream, fBuff, cLevel) .. end_frame(cstream)
 end
 
 
-function _M.decompress (self, cBuff)
+function _M:decompress (cBuff)
    local dstream = self.dstream
-   local res, err = init_dstream(dstream)
-   if not res then
+   local err = init_dstream(dstream)
+   if err then
       return nil, err
    end
    return decompress_stream(dstream, cBuff)
 end
 
 
-function _M.compressFile (self, fname, cLevel)
+function _M:compressFile (fname, cLevel)
    local cstream = self.cstream
    local fin = assert(fopen(fname, "rb"))
    local fout = assert(fopen(fname..".zst", "wb"))
-   local res, err = init_cstream(cstream, cLevel)
-   if not res then
+   local err = init_cstream(cstream, cLevel)
+   if err then
       return nil, err
    end
    local rlen = tonumber(zstd.ZSTD_CStreamInSize());
@@ -215,12 +209,12 @@ function _M.compressFile (self, fname, cLevel)
 end
 
 
-function _M.decompressFile (self, fname, oname)
+function _M:decompressFile (fname, oname)
    local dstream = self.dstream
    local fin = assert(fopen(fname, "rb"))
    local fout = assert(fopen(oname or gsub(fname, "%.zst", ""), "wb"))
-   local res, err = init_dstream(dstream)
-   if not res then
+   local err = init_dstream(dstream)
+   if err then
       return nil, err
    end
    local rlen = tonumber(zstd.ZSTD_DStreamInSize())
