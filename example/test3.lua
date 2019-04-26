@@ -9,10 +9,11 @@ local f = io.open(fname, "wb")
 f:write(txt)
 f:close()
 
-assert(zstd:compressFileUsingCDict(fname, "dictionary"))
+assert(zstd:compressFileUsingDictionary(fname, "dictionary"))
 print("Compress string and save to 'input.txt.zst'")
 
-assert(zstd:decompressFileUsingDDict("input.txt.zst", "foo.txt", "dictionary"))
+assert(zstd:decompressFileUsingDictionary("input.txt.zst", "foo.txt",
+                                          "dictionary"))
 print("Decompress file 'input.txt.zst' to 'foo.txt'")
 
 zstd:free()

@@ -283,7 +283,7 @@ function _M:decompressFile (fname, oname)
 end
 
 
-function _M:compressFileUsingCDict (fname, dname, cLevel)
+function _M:compressFileUsingDictionary (fname, dname, cLevel)
    local cLevel = cLevel or 1
    local cdict = create_cdict(dname, cLevel)
 
@@ -310,7 +310,7 @@ function _M:compressFileUsingCDict (fname, dname, cLevel)
 end
 
 
-function _M:decompressFileUsingDDict (fname, oname, dname)
+function _M:decompressFileUsingDictionary (fname, oname, dname)
    local ddict = create_ddict(dname, cLevel)
 
    local fin = assert(fopen(fname, "rb"))
