@@ -64,6 +64,18 @@ decompressFile
 
 Decompress the input file fname.
 
+compressFileUsingCDict
+--------------
+`syntax: ok, err = zstd:compressFileUsingCDict(path, dict, clvl?)`
+
+Compresses the input file with clvl compression level using a digested Dictionary.
+
+decompressFileUsingDDict
+--------------
+`syntax: ok, err = zstd:decompressFileUsingDDict(fname, dict, outname?)`
+
+Decompress the input file fname using a digested Dictionary.
+
 Author
 ======
 Soojin Nam jsunam@gamil.com

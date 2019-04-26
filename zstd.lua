@@ -4,6 +4,7 @@
 
 
 local ffi = require "ffi"
+local C = ffi.C
 local ffi_new = ffi.new
 local ffi_load = ffi.load
 local ffi_str = ffi.string
@@ -17,6 +18,17 @@ local tconcat = table.concat
 
 
 ffi.cdef[[
+void free(void *ptr);
+
+typedef struct ZSTD_CCtx_s ZSTD_CCtx;
+ZSTD_CCtx* ZSTD_createCCtx(void);
+size_t     ZSTD_freeCCtx(ZSTD_CCtx* cctx);
+
+typedef struct ZSTD_DCtx_s ZSTD_DCtx;
+ZSTD_DCtx* ZSTD_createDCtx(void);
+size_t     ZSTD_freeDCtx(ZSTD_DCtx* dctx);
+
+unsigned long long ZSTD_getFrameContentSize(const void *src, size_t srcSize);
 size_t      ZSTD_compressBound(size_t srcSize);
 int    ZSTD_maxCLevel(void);
 unsigned    ZSTD_isError(size_t code);
@@ -52,6 +64,25 @@ size_t ZSTD_decompressStream(ZSTD_DStream* zds,
                              ZSTD_outBuffer* output, ZSTD_inBuffer* input);
 size_t ZSTD_DStreamInSize(void);
 size_t ZSTD_DStreamOutSize(void);
+
+typedef struct ZSTD_CDict_s ZSTD_CDict;
+ZSTD_CDict* ZSTD_createCDict(const void* dictBuffer, size_t dictSize,
+                             int compressionLevel);
+size_t      ZSTD_freeCDict(ZSTD_CDict* CDict);
+size_t ZSTD_compress_usingCDict(ZSTD_CCtx* cctx,
+                                void* dst, size_t dstCapacity,
+                                const void* src, size_t srcSize,
+                                const ZSTD_CDict* cdict);
+
+typedef struct ZSTD_DDict_s ZSTD_DDict;
+ZSTD_DDict* ZSTD_createDDict(const void* dictBuffer, size_t dictSize);
+size_t      ZSTD_freeDDict(ZSTD_DDict* ddict);
+size_t ZSTD_decompress_usingDDict(ZSTD_DCtx* dctx,
+                                  void* dst, size_t dstCapacity,
+                                  const void* src, size_t srcSize,
+                                  const ZSTD_DDict* ddict);
+unsigned ZSTD_getDictID_fromDDict(const ZSTD_DDict* ddict);
+unsigned ZSTD_getDictID_fromFrame(const void* src, size_t srcSize);
 ]]
 
 
@@ -93,6 +124,28 @@ local function end_frame (cstream)
       return nil, "not fully flushed"
    end
    return ffi_str(obuf, output[0].pos)
+end
+
+
+local function create_cdict (fname, cLevel)
+   local fd = assert(fopen(fname, "rb"))
+   local current = fd:seek()
+   local dictSize = fd:seek("end")
+   fd:seek("set", current)
+   local dictBuffer = ffi_new("char[?]", dictSize, fd:read("*a"))
+   fd:close()
+   return zstd.ZSTD_createCDict(dictBuffer, dictSize, cLevel)
+end
+
+
+local function create_ddict (fname)
+   local fd = assert(fopen(fname, "rb"))
+   local current = fd:seek()
+   local dictSize = fd:seek("end")
+   fd:seek("set", current)
+   local dictBuffer = ffi_new("char[?]", dictSize, fd:read("*a"))
+   fd:close()
+   return zstd.ZSTD_createDDict(dictBuffer, dictSize)
 end
 
 
@@ -226,6 +279,62 @@ function _M:decompressFile (fname, oname)
    end
    fout:close()
    fin:close()
+   return true
+end
+
+
+function _M:compressFileUsingCDict (fname, dname, cLevel)
+   local cLevel = cLevel or 1
+   local cdict = create_cdict(dname, cLevel)
+
+   local fin = assert(fopen(fname, "rb"))
+   local current = fin:seek()
+   local fSize = fin:seek("end")
+   fin:seek("set", current)
+   local fBuff = ffi_new("char[?]", fSize, fin:read("*a"))
+   fin:close()
+
+   local cBuffSize = zstd.ZSTD_compressBound(fSize)
+   local cBuff = ffi_new("char[?]", cBuffSize)
+
+   local cctx = zstd.ZSTD_createCCtx()
+   local cSize = zstd.ZSTD_compress_usingCDict(cctx, cBuff, cBuffSize,
+                                               fBuff, fSize, cdict)
+
+   local fout = assert(fopen(fname..".zst", "wb"))
+   fout:write(ffi_str(cBuff, cSize))
+   fout:close()
+
+   zstd.ZSTD_freeCCtx(cctx)
+   return true
+end
+
+
+function _M:decompressFileUsingDDict (fname, oname, dname)
+   local ddict = create_ddict(dname, cLevel)
+
+   local fin = assert(fopen(fname, "rb"))
+   local current = fin:seek()
+   local cSize = fin:seek("end")
+   fin:seek("set", current)
+   local cBuff = ffi_new("char[?]", cSize, fin:read("*a"))
+   fin:close()
+
+   local rSize = zstd.ZSTD_getFrameContentSize(cBuff, cSize)
+   local rBuff = ffi_new("char[?]", rSize)
+
+   local expectedDictID = zstd.ZSTD_getDictID_fromDDict(ddict)
+   local actualDictID = zstd.ZSTD_getDictID_fromFrame(cBuff, cSize)
+
+   local dctx = zstd.ZSTD_createDCtx()
+   local dSize = zstd.ZSTD_decompress_usingDDict(dctx, rBuff, rSize,
+                                                 cBuff, cSize, ddict)
+
+   local fout = assert(fopen(oname or gsub(fname, "%.zst", ""), "wb"))
+   fout:write(ffi_str(rBuff, rSize))
+   fout:close()
+
+   zstd.ZSTD_freeDCtx(dctx)
    return true
 end
 
