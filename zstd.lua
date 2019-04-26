@@ -64,7 +64,7 @@ local zstd = ffi_load "zstd"
 
 
 local _M = {
-    version = '0.2.1'
+    version = '0.2.2'
 }
 
 
