@@ -10,7 +10,7 @@ f:write(txt)
 f:close()
 
 assert(zstd:compressFileUsingDictionary(fname, "dictionary"))
-print("Compress string and save to 'input.txt.zst'")
+print("Compress string with dictionary and save to 'input.txt.zst'")
 
 assert(zstd:decompressFileUsingDictionary("input.txt.zst", "foo.txt",
                                           "dictionary"))

@@ -18,8 +18,6 @@ local tconcat = table.concat
 
 
 ffi.cdef[[
-void free(void *ptr);
-
 typedef struct ZSTD_CCtx_s ZSTD_CCtx;
 ZSTD_CCtx* ZSTD_createCCtx(void);
 size_t     ZSTD_freeCCtx(ZSTD_CCtx* cctx);
@@ -95,12 +93,12 @@ local zstd = ffi_load "zstd"
 
 
 local _M = {
-    version = '0.2.2'
+    version = '0.2.3'
 }
 
 
-local function init_cstream (cstream, clvl)
-   local res = zstd.ZSTD_initCStream(cstream, clvl or 1);
+local function init_cstream (cstream, cLevel)
+   local res = zstd.ZSTD_initCStream(cstream, cLevel or 1);
    if zstd.ZSTD_isError(res) ~= 0 then
       return "ZSTD_initCStream() error: "..ffi_str(zstd.ZSTD_getErrorName(res))
    end
@@ -292,7 +290,6 @@ function _M:compressFileUsingDictionary (fname, dname, cLevel)
    local fout = assert(fopen(fname..".zst", "wb"))
    fout:write(ffi_str(cBuff, cSize))
    fout:close()
-
    zstd.ZSTD_freeCCtx(cctx)
    return true
 end
@@ -310,15 +307,12 @@ function _M:decompressFileUsingDictionary (fname, oname, dname)
 
    local rSize = zstd.ZSTD_getFrameContentSize(cBuff, cSize)
    local rBuff = ffi_new("char[?]", rSize)
-   local expectedDictID = zstd.ZSTD_getDictID_fromDDict(ddict)
-   local actualDictID = zstd.ZSTD_getDictID_fromFrame(cBuff, cSize)
    local dctx = zstd.ZSTD_createDCtx()
    local dSize = zstd.ZSTD_decompress_usingDDict(dctx, rBuff, rSize,
                                                  cBuff, cSize, ddict)
    local fout = assert(fopen(oname or gsub(fname, "%.zst", ""), "wb"))
    fout:write(ffi_str(rBuff, rSize))
    fout:close()
-
    zstd.ZSTD_freeDCtx(dctx)
    return true
 end
