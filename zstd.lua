@@ -127,28 +127,6 @@ local function end_frame (cstream)
 end
 
 
-local function create_cdict (fname, cLevel)
-   local fd = assert(fopen(fname, "rb"))
-   local current = fd:seek()
-   local dictSize = fd:seek("end")
-   fd:seek("set", current)
-   local dictBuffer = ffi_new("char[?]", dictSize, fd:read("*a"))
-   fd:close()
-   return zstd.ZSTD_createCDict(dictBuffer, dictSize, cLevel)
-end
-
-
-local function create_ddict (fname)
-   local fd = assert(fopen(fname, "rb"))
-   local current = fd:seek()
-   local dictSize = fd:seek("end")
-   fd:seek("set", current)
-   local dictBuffer = ffi_new("char[?]", dictSize, fd:read("*a"))
-   fd:close()
-   return zstd.ZSTD_createDDict(dictBuffer, dictSize)
-end
-
-
 function _M.new (self)
    local cstream = zstd.ZSTD_createCStream();
    if not cstream then
@@ -220,9 +198,9 @@ local function decompress_stream (dstream, inbuf)
 end
 
 
-function _M:compress (fBuff, clvl)
+function _M:compress (fBuff, cLevel)
    local cstream = self.cstream
-   local err = init_cstream(cstream, clvl)
+   local err = init_cstream(cstream, cLevel)
    if err then
       return nil, err
    end
@@ -283,9 +261,21 @@ function _M:decompressFile (fname, oname)
 end
 
 
+local function create_dict (iscompress, fname, cLevel)
+   local fd = assert(fopen(fname, "rb"))
+   local current = fd:seek()
+   local dictSize = fd:seek("end")
+   fd:seek("set", current)
+   local dictBuffer = ffi_new("char[?]", dictSize, fd:read("*a"))
+   fd:close()
+   return iscompress
+      and zstd.ZSTD_createCDict(dictBuffer, dictSize, cLevel)
+      or  zstd.ZSTD_createDDict(dictBuffer, dictSize)
+end
+
+
 function _M:compressFileUsingDictionary (fname, dname, cLevel)
-   local cLevel = cLevel or 1
-   local cdict = create_cdict(dname, cLevel)
+   local cdict = create_dict(true, dname, cLevel or 1)
 
    local fin = assert(fopen(fname, "rb"))
    local current = fin:seek()
@@ -296,11 +286,9 @@ function _M:compressFileUsingDictionary (fname, dname, cLevel)
 
    local cBuffSize = zstd.ZSTD_compressBound(fSize)
    local cBuff = ffi_new("char[?]", cBuffSize)
-
    local cctx = zstd.ZSTD_createCCtx()
    local cSize = zstd.ZSTD_compress_usingCDict(cctx, cBuff, cBuffSize,
                                                fBuff, fSize, cdict)
-
    local fout = assert(fopen(fname..".zst", "wb"))
    fout:write(ffi_str(cBuff, cSize))
    fout:close()
@@ -311,7 +299,7 @@ end
 
 
 function _M:decompressFileUsingDictionary (fname, oname, dname)
-   local ddict = create_ddict(dname, cLevel)
+   local ddict = create_dict(false, dname)
 
    local fin = assert(fopen(fname, "rb"))
    local current = fin:seek()
@@ -322,14 +310,11 @@ function _M:decompressFileUsingDictionary (fname, oname, dname)
 
    local rSize = zstd.ZSTD_getFrameContentSize(cBuff, cSize)
    local rBuff = ffi_new("char[?]", rSize)
-
    local expectedDictID = zstd.ZSTD_getDictID_fromDDict(ddict)
    local actualDictID = zstd.ZSTD_getDictID_fromFrame(cBuff, cSize)
-
    local dctx = zstd.ZSTD_createDCtx()
    local dSize = zstd.ZSTD_decompress_usingDDict(dctx, rBuff, rSize,
                                                  cBuff, cSize, ddict)
-
    local fout = assert(fopen(oname or gsub(fname, "%.zst", ""), "wb"))
    fout:write(ffi_str(rBuff, rSize))
    fout:close()
